@@ -1,0 +1,165 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <meta name="description" content="This is a project for freecodecamp" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--Css code-->
+    <link rel="stylesheet" type="text/css" href="./css/Style.css">
+    <!--Import d3 library-->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <!--Import jQuery-->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <title>Heat Map</title>
+</head>
+
+
+<body>
+    <script src="https://cdn.freecodecamp.org/testable-projects-fcc/v1/bundle.js"></script>
+    <div id="title">Monthly Global Land-Surface Temperature</div>
+    <div id="description">1753 - 2015: base temperature 8.66℃</div>
+    <script>
+        //Retrueve data 
+        const url = 'https://raw.githubusercontent.com/freeCodeCamp/ProjectReferenceData/master/global-temperature.json';
+        const req = new XMLHttpRequest(); 
+        req.open('GET', url, true); 
+        req.send();
+        req.onload = () => {
+            var baseTemperature = JSON.parse(req.responseText)["baseTemperature"];
+            const dataset   = JSON.parse(req.responseText)["monthlyVariance"];
+            //const timeData = dataset.map(d => { return new Date(d.year, d.month-1)});
+            const monthObject = {
+                0: "January",
+                1: "February",
+                2: "March",
+                3: "April",
+                4: "May",
+                5: "June",
+                6: "July",
+                7: "August",
+                8: "September",
+                9: "October",
+                10: "November",
+                11: "December"
+            };
+            const colors = ["#a50026", "#d73027", "#f46d43", "#fdae61", "#fee090", "#ffffbf", "#e0f3f8", "#abd9e9", "#74add1", "#4575b4", "#313695"];
+            const height  = 400; 
+            const width   = 800; 
+            const padding = 60;
+            const barHeight = (height - padding) / 12;
+            const barWidth = width/Math.floor(dataset.length/12); 
+             
+
+            // Create svg container
+            const svg = d3.select("body")
+                .append("svg")
+                .attr("height", height + "px")
+                .attr("width", width + "px")
+                .attr("class", "svg-container")
+
+            //Create a x-scale 
+            var xScale = d3.scaleTime()
+                .domain([d3.min(dataset, d => {return d.year}), d3.max(dataset, d => {return d.year})])
+                .range([padding, width - padding]);
+
+            //Create a y-scale
+            var yScale = d3.scaleLinear()
+                .domain([0, 11])
+                .range([padding, height - padding]);
+
+            //Create temperature scale 
+            var tempScale = d3.scaleLinear()
+                .domain([d3.min(dataset, d => { return (baseTemperature - d.variance) }), d3.max(dataset, d => { return (baseTemperature - d.variance)})])
+                .range([0, 10]);
+
+            //Create a function that returns a color based on the variance 
+            let getColor = (variance) => {
+                return colors[Math.floor(tempScale(baseTemperature - variance))];
+            }
+
+            //Create a x-axis
+            const xAxis = d3.axisBottom(xScale).tickFormat(d3.format('d')); 
+
+            //Create y-axis 
+            const yAxis = d3.axisLeft(yScale)
+                .tickFormat((d, i) => {
+                    return monthObject[i];
+                })
+
+            //Display data 
+            svg.selectAll("rect")
+                .data(dataset)
+                .enter()
+                .append("rect")
+                .attr("class", "cell")
+                .attr("id", (d, i)=>i)
+                .attr("data-month", (d, i) => { return dataset[i].month - 1 })
+                .attr("data-year", (d, i) => { return dataset[i].year })
+                .attr("data-temp", (d, i) => { return dataset[i].variance })
+                .attr("x", d => xScale(d.year))
+                .attr("y", (d, i) => yScale(dataset[i].month - 1))
+                .attr("width", barWidth)
+                .attr("height", barHeight)
+                .attr("fill", (d, i) => { return getColor(dataset[i].variance) });
+
+
+            // Display x-axis 
+            svg.append("g")
+                .attr("transform", "translate(0, " + (height - padding) + ")")
+                .attr("id", "x-axis")
+                .call(xAxis);
+
+            // Dispay y-axis 
+            svg.append("g")
+                .attr("transform", "translate(" + padding + ", 0)")
+                .attr("id", "y-axis")
+                .call(yAxis);
+
+            //Create a tooltip 
+            svg.append("g")
+                .attr("id", "tooltip")
+                .attr("opacity", 0);
+            //Create a legend 
+            const legend = d3.select("body")
+                .append("svg")
+                .attr("width", 220 + "px")
+                .attr("height", 50 + "px")
+                .attr("id", "legend")
+                .selectAll("rect")
+                .data(colors)
+                .enter()
+                .append("rect")
+                .attr("width", 20 + "px")
+                .attr("height", 50 + "px")
+                .attr("x", (d, i) => { return 220-20 * (i+1) })
+                .attr("fill", d => d);
+
+            //Events 
+            $(".cell").mouseover(function () {
+                $("#tooltip").attr("opacity", 1)
+                    .attr("x", xScale($(this).attr("data-year")) + 25)
+                    .attr("y", yScale($(this).attr("data-month")))
+                    .attr("data-year", $(this).attr("data-year"));
+
+                id = $(this).attr("id");
+                var words = [dataset[id].year + " " + monthObject[dataset[id].month - 1], (baseTemperature - dataset[id].variance).toFixed(2) + "℃"]
+                d3.select("#tooltip")
+                    .selectAll("text")
+                    .data(words)
+                    .enter()
+                    .append("text")
+                    .attr("x", (d, i) => { return xScale($(this).attr("data-year")) + 5})
+                    .attr("y", (d, i) => { return yScale($(this).attr("data-month")) + 10 * i})
+                    .text(d=>d);
+            })
+
+            $(".cell").mouseout(function () {
+                $("#tooltip").attr("opacity", 0);
+                $("#tooltip").text("");
+            })
+                
+        }
+    </script>
+</body>
+</html>
